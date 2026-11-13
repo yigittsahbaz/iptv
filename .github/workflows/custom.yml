@@ -17,10 +17,10 @@ jobs:
         run: node custom/generate.mjs
       - name: Commit updated playlists
         run: |
-          if [ -n "$(git status --porcelain custom/playlist.m3u custom/playlist-https.m3u)" ]; then
+          if [ -n "$(git status --porcelain custom/)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add custom/playlist.m3u custom/playlist-https.m3u
+            git add custom/
             git commit -m "[Bot] Update custom playlists"
             git push
           fi

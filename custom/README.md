@@ -7,23 +7,29 @@ Bu klasör, [generate.mjs](./generate.mjs) betiği tarafından `streams/*.m3u` d
 - **İngilizce (`eng`):** `movies`, `series`, `sports`
 - **Fransızca (`fra`):** `movies`, `series`, `sports`, `news`, `documentary`
 - **Hariç tutulanlar:** Türk kanalları (`TR` / `tur`), NSFW ve telif bloklistesi kanalları
-- Her kanal için tek en iyi akış seçilir (öncelik sırası: coğrafi engelsiz > `https://` > 24/7 > ana yayın > yüksek çözünürlük).
 
-## VLC'de Kullanım
+## VLC'de Listelere Ayrılmış Kullanım
 
-**Ortam → Ağ Akışı Aç** (`Ctrl+N`) menüsünden doğrudan yapıştırabilirsiniz:
+Masaüstü **VLC**, tek bir `.m3u` dosyasındaki `group-title="..."` etiketinden otomatik klasör oluşturmaz; tek bir uzun liste gösterir. Listeleri ayrı ayrı görmek için aşağıdaki **sadece `https://`** listelerini kullanabilirsiniz:
 
-- **Tüm eşleşen kanallar (625 kanal):**
-  `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/playlist.m3u`
-- **Sadece şifreli `https://` yayınlar (542 kanal — daha güvenli):**
-  `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/playlist-https.m3u`
+### 1. Tek Linkten Klasörlü Ana Menü (VLC'de açılır alt listeler)
+VLC → **Ortam → Ağ Akışı Aç** (`Ctrl+N`):
+- `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https/index.m3u`
+*(Oynatma listesinde 6 ayrı başlık görünür; çift tıkladığınızda o listenin kanalları açılır.)*
 
-## Listeyi Yenileme
+Alternatif olarak bilgisayarınıza indirip çift tıklayabileceğiniz gerçek klasörlü VLC formatı:
+- [https/playlist.xspf](./https/playlist.xspf)
 
-Yerelde çalıştırmak için (Node.js 20+ yeterlidir):
+### 2. Kategori Bazlı Ayrı HTTPS Bağlantıları
+İstediğin kategoriyi doğrudan VLC'de ayrı açabilirsin:
 
-```bash
-node custom/generate.mjs
-```
+- **İngilizce Spor:** `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https/en-sports.m3u`
+- **İngilizce Dizi & Film:** `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https/en-movies-series.m3u`
+- **Fransızca Spor:** `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https/fr-sports.m3u`
+- **Fransızca Dizi & Film:** `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https/fr-movies-series.m3u`
+- **Fransızca Haber:** `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https/fr-news.m3u`
+- **Fransızca Belgesel:** `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https/fr-documentary.m3u`
 
-Filtreleri değiştirmek için [generate.mjs](./generate.mjs) dosyasındaki `CONFIG` bölümünü düzenleyip betiği tekrar çalıştırabilirsiniz.
+### 3. Tek Parça Tüm Liste
+- **Sadece HTTPS:** `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/playlist-https.m3u`
+- **HTTPS + HTTP:** `https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/playlist.m3u`

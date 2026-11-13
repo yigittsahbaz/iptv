@@ -4,7 +4,9 @@ import path from 'node:path'
 const ROOT_DIR = process.cwd()
 const STREAMS_DIR = path.join(ROOT_DIR, 'streams')
 const CUSTOM_DIR = path.join(ROOT_DIR, 'custom')
+const HTTPS_SPLIT_DIR = path.join(CUSTOM_DIR, 'https')
 const API_BASE = 'https://iptv-org.github.io/api'
+const RAW_BASE = 'https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https'
 
 const CONFIG = {
   excludedCountries: new Set(['TR']),
@@ -20,6 +22,15 @@ function sanitizeHeaderValue(value) {
   return String(value || '')
     .replace(/[\r\n"]/g, '')
     .trim()
+}
+
+function escapeXml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
 }
 
 function isSafeHttpUrl(url, httpsOnly = false) {
@@ -106,12 +117,19 @@ function parseLabelsAndQuality(rawName) {
   }
 }
 
-async function fetchJson(endpoint) {
-  const res = await fetch(`${API_BASE}/${endpoint}.json`)
-  if (!res.ok) {
-    throw new Error(`Failed to fetch ${endpoint}.json: HTTP ${res.status}`)
+async function fetchJson(endpoint, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(`${API_BASE}/${endpoint}.json`)
+      if (res.ok) return res.json()
+      if (res.status < 500 || attempt === retries) {
+        throw new Error(`Failed to fetch ${endpoint}.json: HTTP ${res.status}`)
+      }
+    } catch (err) {
+      if (attempt === retries) throw err
+    }
+    await new Promise(resolve => setTimeout(resolve, attempt * 1000))
   }
-  return res.json()
 }
 
 function pickBestLogo(logos) {
@@ -179,6 +197,54 @@ function formatM3U(entries) {
     lines.push(s.url)
   }
   return lines.join('\r\n') + '\r\n'
+}
+
+function formatXSPF(sections) {
+  const tracksXml = []
+  const nodesXml = []
+  let tid = 0
+
+  for (const section of sections) {
+    const itemRefs = []
+    for (const s of section.entries) {
+      const currentId = tid++
+      const opts = []
+      if (s.referrer) opts.push(`        <vlc:option>http-referrer=${escapeXml(s.referrer)}</vlc:option>`)
+      if (s.userAgent) opts.push(`        <vlc:option>http-user-agent=${escapeXml(s.userAgent)}</vlc:option>`)
+      const imageTag = s.logo ? `\n      <image>${escapeXml(s.logo)}</image>` : ''
+
+      tracksXml.push(
+        `    <track>\n` +
+        `      <location>${escapeXml(s.url)}</location>\n` +
+        `      <title>${escapeXml(s.displayTitle)}</title>${imageTag}\n` +
+        `      <extension application="http://www.videolan.org/vlc/playlist/0">\n` +
+        `        <vlc:id>${currentId}</vlc:id>\n` +
+        (opts.length ? opts.join('\n') + '\n' : '') +
+        `      </extension>\n` +
+        `    </track>`
+      )
+      itemRefs.push(`      <vlc:item tid="${currentId}"/>`)
+    }
+
+    nodesXml.push(
+      `    <vlc:node title="${escapeXml(section.label)}">\n` +
+      itemRefs.join('\n') +
+      `\n    </vlc:node>`
+    )
+  }
+
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<playlist xmlns="http://xspf.org/ns/0/" xmlns:vlc="http://www.videolan.org/vlc/playlist/ns/0/" version="1">\n` +
+    `  <title>Custom IPTV (HTTPS)</title>\n` +
+    `  <trackList>\n` +
+    tracksXml.join('\n') +
+    `\n  </trackList>\n` +
+    `  <extension application="http://www.videolan.org/vlc/playlist/0">\n` +
+    nodesXml.join('\n') +
+    `\n  </extension>\n` +
+    `</playlist>\n`
+  )
 }
 
 async function main() {
@@ -254,6 +320,8 @@ async function main() {
         tvgId: item.tvgId,
         displayTitle,
         groupTitle,
+        matchedLangs,
+        matchedCats: [...matchedCats],
         logo,
         referrer: item.referrer,
         userAgent: item.userAgent,
@@ -290,8 +358,62 @@ async function main() {
   const httpsBest = pickBestPerChannel(candidates.filter(c => c.url.startsWith('https://')))
 
   await fs.mkdir(CUSTOM_DIR, { recursive: true })
+  await fs.mkdir(HTTPS_SPLIT_DIR, { recursive: true })
+
   await fs.writeFile(path.join(CUSTOM_DIR, 'playlist.m3u'), formatM3U(allBest), 'utf8')
   await fs.writeFile(path.join(CUSTOM_DIR, 'playlist-https.m3u'), formatM3U(httpsBest), 'utf8')
+
+  const splitDefs = [
+    {
+      filename: 'en-sports.m3u',
+      label: 'EN | Sports',
+      filter: s => s.matchedLangs.includes('eng') && s.matchedCats.includes('sports')
+    },
+    {
+      filename: 'en-movies-series.m3u',
+      label: 'EN | Movies & Series',
+      filter: s =>
+        s.matchedLangs.includes('eng') &&
+        (s.matchedCats.includes('movies') || s.matchedCats.includes('series'))
+    },
+    {
+      filename: 'fr-sports.m3u',
+      label: 'FR | Sports',
+      filter: s => s.matchedLangs.includes('fra') && s.matchedCats.includes('sports')
+    },
+    {
+      filename: 'fr-movies-series.m3u',
+      label: 'FR | Movies & Series',
+      filter: s =>
+        s.matchedLangs.includes('fra') &&
+        (s.matchedCats.includes('movies') || s.matchedCats.includes('series'))
+    },
+    {
+      filename: 'fr-news.m3u',
+      label: 'FR | News',
+      filter: s => s.matchedLangs.includes('fra') && s.matchedCats.includes('news')
+    },
+    {
+      filename: 'fr-documentary.m3u',
+      label: 'FR | Documentary',
+      filter: s => s.matchedLangs.includes('fra') && s.matchedCats.includes('documentary')
+    }
+  ]
+
+  const sections = []
+  const menuLines = ['#EXTM3U']
+  for (const def of splitDefs) {
+    const entries = httpsBest
+      .filter(def.filter)
+      .sort((a, b) => a.channelName.localeCompare(b.channelName))
+    await fs.writeFile(path.join(HTTPS_SPLIT_DIR, def.filename), formatM3U(entries), 'utf8')
+    sections.push({ ...def, entries })
+    menuLines.push(`#EXTINF:-1,${def.label} (${entries.length})`)
+    menuLines.push(`${RAW_BASE}/${def.filename}`)
+  }
+
+  await fs.writeFile(path.join(HTTPS_SPLIT_DIR, 'index.m3u'), menuLines.join('\r\n') + '\r\n', 'utf8')
+  await fs.writeFile(path.join(HTTPS_SPLIT_DIR, 'playlist.xspf'), formatXSPF(sections), 'utf8')
 
   const summarize = list => {
     const counts = {}
@@ -305,6 +427,10 @@ async function main() {
   console.log(
     `Generated custom/playlist-https.m3u (${httpsBest.length} channels):`,
     summarize(httpsBest)
+  )
+  console.log(
+    'Generated split HTTPS playlists:',
+    Object.fromEntries(sections.map(s => [s.filename, s.entries.length]))
   )
 }
 
