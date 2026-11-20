@@ -1,7 +1,7 @@
 #EXTM3U
 #EXTINF:-1,EN | Sports (120)
 https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https/en-sports.m3u
-#EXTINF:-1,EN | Movies & Series (317)
+#EXTINF:-1,EN | Movies & Series (294)
 https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https/en-movies-series.m3u
 #EXTINF:-1,FR | Sports (8)
 https://raw.githubusercontent.com/yigittsahbaz/iptv/master/custom/https/fr-sports.m3u
